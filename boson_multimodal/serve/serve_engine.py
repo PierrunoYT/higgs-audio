@@ -187,6 +187,7 @@ class HiggsAudioServeEngine:
         device: str = "cuda",
         torch_dtype: Union[torch.dtype, str] = "auto",
         kv_cache_lengths: List[int] = [1024, 4096, 8192],  # Multiple KV cache sizes
+        load_in_8bit: bool = False,
     ):
         """
         Initialize the HiggsAudioServeEngine, a serving wrapper for the HiggsAudioModel.
@@ -205,14 +206,26 @@ class HiggsAudioServeEngine:
                 The lengths of the KV caches to use for the model. Used for cuda graph capture when device is cuda.
             torch_dtype (Union[torch.dtype, str]):
                 The dtype to use for the model.
+            load_in_8bit (bool):
+                Whether to load the model in 8-bit quantized mode to save memory.
         """
         self.device = device
         self.model_name_or_path = model_name_or_path
         self.torch_dtype = torch_dtype
+        self.load_in_8bit = load_in_8bit
 
         # Initialize model and tokenizer
-        self.model = HiggsAudioModel.from_pretrained(model_name_or_path, torch_dtype=torch_dtype).to(device)
-        logger.info(f"Loaded model from {model_name_or_path}, dtype: {self.model.dtype}")
+        if load_in_8bit:
+            logger.info(f"Loading model in 8-bit quantized mode")
+            self.model = HiggsAudioModel.from_pretrained(
+                model_name_or_path, 
+                torch_dtype=torch_dtype,
+                load_in_8bit=True,
+                device_map="auto"
+            )
+        else:
+            self.model = HiggsAudioModel.from_pretrained(model_name_or_path, torch_dtype=torch_dtype).to(device)
+        logger.info(f"Loaded model from {model_name_or_path}, dtype: {self.model.dtype}, 8-bit: {load_in_8bit}")
 
         if tokenizer_name_or_path is None:
             tokenizer_name_or_path = model_name_or_path
@@ -272,10 +285,12 @@ class HiggsAudioServeEngine:
             round_to=1,
         )
 
-        # Capture CUDA graphs for each KV cache length
-        if device == "cuda":
+        # Capture CUDA graphs for each KV cache length (not supported with 8-bit quantization)
+        if device == "cuda" and not load_in_8bit:
             logger.info(f"Capturing CUDA graphs for each KV cache length")
             self.model.capture_model(self.kv_caches.values())
+        elif load_in_8bit:
+            logger.info(f"CUDA graph capture disabled for 8-bit quantized models")
 
     def _prepare_inputs(self, chat_ml_sample: ChatMLSample, force_audio_gen: bool = False):
         input_tokens, _, audio_contents, _ = prepare_chatml_sample(
