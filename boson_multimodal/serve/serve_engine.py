@@ -227,7 +227,7 @@ class HiggsAudioServeEngine:
             self.model = HiggsAudioModel.from_pretrained(model_name_or_path, torch_dtype=torch_dtype).to(device)
         logger.info(f"Loaded model from {model_name_or_path}, dtype: {self.model.dtype}, 8-bit: {load_in_8bit}")
 
-        if tokenizer_name_or_path is None:
+        if tokenizer_name_or_path is None or tokenizer_name_or_path == "":
             tokenizer_name_or_path = model_name_or_path
         logger.info(f"Loading tokenizer from {tokenizer_name_or_path}")
         self.tokenizer = AutoTokenizer.from_pretrained(tokenizer_name_or_path)
