@@ -186,7 +186,7 @@ class HiggsAudioServeEngine:
         tokenizer_name_or_path: Optional[str] = None,
         device: str = "cuda",
         torch_dtype: Union[torch.dtype, str] = "auto",
-        kv_cache_lengths: List[int] = [1024, 4096, 8192],  # Multiple KV cache sizes
+        kv_cache_lengths: List[int] = [1024, 2048, 4096],  # Optimized KV cache sizes for lower VRAM
         load_in_8bit: bool = False,
     ):
         """
@@ -214,17 +214,23 @@ class HiggsAudioServeEngine:
         self.torch_dtype = torch_dtype
         self.load_in_8bit = load_in_8bit
 
-        # Initialize model and tokenizer
+        # Initialize model and tokenizer with memory optimizations
         if load_in_8bit:
-            logger.info(f"Loading model in 8-bit quantized mode")
+            logger.info(f"Loading model in 8-bit quantized mode for reduced VRAM usage")
             self.model = HiggsAudioModel.from_pretrained(
                 model_name_or_path, 
                 torch_dtype=torch_dtype,
                 load_in_8bit=True,
-                device_map="auto"
+                device_map="auto",
+                low_cpu_mem_usage=True
             )
         else:
-            self.model = HiggsAudioModel.from_pretrained(model_name_or_path, torch_dtype=torch_dtype).to(device)
+            logger.info(f"Loading model in full precision mode")
+            self.model = HiggsAudioModel.from_pretrained(
+                model_name_or_path, 
+                torch_dtype=torch_dtype,
+                low_cpu_mem_usage=True
+            ).to(device)
         logger.info(f"Loaded model from {model_name_or_path}, dtype: {self.model.dtype}, 8-bit: {load_in_8bit}")
 
         if tokenizer_name_or_path is None or tokenizer_name_or_path == "":
